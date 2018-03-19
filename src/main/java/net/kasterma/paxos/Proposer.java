@@ -32,7 +32,7 @@ public class Proposer extends AbstractActor {
      * Keep track of promises we have received not to accept certain types of
      * Proposals.
      */
-    private List<ActorRef> promiseList = null;
+    private Map<ActorRef, Acceptor.Proposal> promisesReceived = null;
 
     static Props props(final GenerateProposalIdx genIdx,
                        final List<ActorRef> acceptorList) {
@@ -50,12 +50,14 @@ public class Proposer extends AbstractActor {
      * send it to all the acceptors.
      */
     private void propose() {
-        Optional<Accept> maxAccept =
-                acceptances.values().stream().max(Accept::compareTo);
+        Optional<Acceptor.Proposal> maxAccept =
+                promisesReceived.values().stream()
+                        .filter(Objects::nonNull)
+                        .max(Comparator.comparingInt(Acceptor.Proposal::getIdx));
         // If this is called there should be a max present.
         Acceptor.Proposal p;
         if (maxAccept.isPresent()) {
-            int val = maxAccept.get().getProp().getVal();
+            int val = maxAccept.get().getVal();
             p = new Acceptor.Proposal(idx, val);
         } else {
             // For now just propose random value
@@ -63,14 +65,14 @@ public class Proposer extends AbstractActor {
             log.info("Making proposal with new random value {}", p.getVal());
         }
 
-        promiseList.forEach(a -> a.tell(p, getSelf()));
-        promiseList = null; // No longer waiting for pomises
+        promisesReceived.forEach((key, value) -> key.tell(p, getSelf()));
+        promisesReceived = null; // No longer waiting for pomises
     }
 
     private void prepare() {
         idx = genIdx.get();
         acceptances = new HashMap<>();
-        promiseList = new ArrayList<>();
+        promisesReceived = new HashMap<>();
         Acceptor.Prepare prep = new Acceptor.Prepare(idx);
         log.info("Sending Prepare {}", prep);
         acceptorList.forEach(a -> a.tell(prep, getSelf()));
@@ -140,30 +142,31 @@ public class Proposer extends AbstractActor {
     @AllArgsConstructor
     @Data
     static class Promise {
+        final Acceptor.Proposal p;
         final int idx;
     }
 
     private void promise(final Promise p) {
         if (p.getIdx() != idx) {
-            log.info("got promise for not (no longer) expected idx (recv {}, " +
-                    "expected {})", p.getIdx(), idx);
+            log.info("got promise for not (no longer) expected idx (recv {}, "
+                    + "expected {})", p.getIdx(), idx);
             return;
         }
-        if (promiseList == null) {
+        if (promisesReceived == null) {
             log.info("No longer needed promise received");
             return;
         }
-        if (promiseList.contains(getSender())) {
+        if (promisesReceived.containsKey(getSender())) {
             log.info("double recv promise");
             return;
         }
         if (acceptorList.contains(getSender())) {
-            promiseList.add(getSender());
+            promisesReceived.put(getSender(), p.getP());
         } else {
             log.error("Got promise from non-acceptor");
             return;
         }
-        if (promiseList.size() > acceptorList.size() / 2) {
+        if (promisesReceived.size() > acceptorList.size() / 2) {
             log.info("PROPOSE");
             propose();
         }
