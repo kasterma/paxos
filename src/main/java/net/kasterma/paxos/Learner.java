@@ -16,9 +16,9 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 public class Learner extends AbstractActor {
     private final List<ActorRef> acceptorList;
-    private Map<ActorRef, Acceptor.Proposal> accepted = null;
+    private final Map<ActorRef, Acceptor.Proposal> accepted = new HashMap<>();
     private final FiniteDuration duration =
-            Duration.create(10, TimeUnit.SECONDS);
+            Duration.create(1, TimeUnit.SECONDS);
 
     static Props props(final List<ActorRef> acceptorList) {
         return Props.create(Learner.class, acceptorList);
@@ -53,13 +53,7 @@ public class Learner extends AbstractActor {
      */
     private void decided(final Acceptor.Proposal p) {
         if (acceptorList.contains(sender())) {
-            // Check if this is not an older accepted proposal from the same
-            // acceptor.
-            if (accepted.get(sender()).getIdx() < p.getIdx()) {
-                accepted.put(sender(), p);
-            } else {
-                log.info("Proposal was older than already received proposal");
-            }
+            accepted.put(sender(), p);
             Map<Acceptor.Proposal, Integer> cts = new HashMap<>();
             accepted.values()
                     .forEach(pp -> cts.merge(pp, 1, Integer::sum));
@@ -71,9 +65,7 @@ public class Learner extends AbstractActor {
                         e.get().getKey().getVal());
             } else {
                 log.info("No evidence of chosen value yet");
-                getContext().getSystem().scheduler().scheduleOnce(duration,
-                        getSelf(), new CheckValue(),
-                        getContext().getSystem().dispatcher(), null);
+                scheduleCheckValue(duration);
             }
         } else {
             log.error("Recvd accepted proposal from acceptor not in our list");

@@ -64,7 +64,7 @@ public class Acceptor extends AbstractActor {
             // the id in the prepare is the smallest that should still be
             // accepted
             maxPromise = p.getIdx() - 1;
-            getSender().tell(new Proposer.Promise(maxPromise), getSelf());
+            getSender().tell(new Proposer.Promise(p.getIdx()), getSelf());
         } else {
             log.info("Recvd prepare for too small value");
             getSender().tell(new Proposer.TooSmall(p.getIdx()), getSelf());

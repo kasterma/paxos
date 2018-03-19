@@ -63,7 +63,8 @@ public class Proposer extends AbstractActor {
             log.info("Making proposal with new random value {}", p.getVal());
         }
 
-        acceptorList.forEach(a -> a.tell(p, getSelf()));
+        promiseList.forEach(a -> a.tell(p, getSelf()));
+        promiseList = null; // No longer waiting for pomises
     }
 
     private void prepare() {
@@ -71,6 +72,7 @@ public class Proposer extends AbstractActor {
         acceptances = new HashMap<>();
         promiseList = new ArrayList<>();
         Acceptor.Prepare prep = new Acceptor.Prepare(idx);
+        log.info("Sending Prepare {}", prep);
         acceptorList.forEach(a -> a.tell(prep, getSelf()));
     }
 
@@ -112,14 +114,16 @@ public class Proposer extends AbstractActor {
         log.info("accept");
         // The check that the index for the proposal is then then our prepare index if to check my programming, it would
         // be an invalid action on the part of the Acceptor to send a too large idx.
-        if (a.idx == idx && a.getProp().getIdx() < idx) {
+        if (a.idx == idx && a.getProp().getIdx() == idx) {
             ActorRef sender = getSender();
             // This check is only needed to check my programming; this kind of error would be byzantine or
             // malicious.  Not part of the standard paxos algo to deal with.
             if (acceptorList.contains(sender)) {
                 acceptances.put(getSender(), a);
                 if (acceptances.size() * 2 > acceptorList.size()) {
-                    propose();
+                    log.info("decided");
+                } else {
+                    log.info("not enough");
                 }
             } else {
                 log.info("Received acceptance from acceptor that is not on acceptor list");
@@ -139,18 +143,28 @@ public class Proposer extends AbstractActor {
     }
 
     private void promise(final Promise p) {
-        if (p.getIdx() == idx) {
-            if (promiseList.contains(getSender())) {
-                log.info("double recv promise");
-            } else {
-                if (acceptorList.contains(getSender())) {
-                    promiseList.add(getSender());
-                } else {
-                    log.error("Got promise from non-acceptor");
-                }
-            }
+        if (p.getIdx() != idx) {
+            log.info("got promise for not (no longer) expected idx (recv {}, " +
+                    "expected {})", p.getIdx(), idx);
+            return;
+        }
+        if (promiseList == null) {
+            log.info("No longer needed promise received");
+            return;
+        }
+        if (promiseList.contains(getSender())) {
+            log.info("double recv promise");
+            return;
+        }
+        if (acceptorList.contains(getSender())) {
+            promiseList.add(getSender());
         } else {
-            log.info("got promise for not (no longer) expected idx (recv {}, expected {})", p.getIdx(), idx);
+            log.error("Got promise from non-acceptor");
+            return;
+        }
+        if (promiseList.size() > acceptorList.size() / 2) {
+            log.info("PROPOSE");
+            propose();
         }
     }
 
