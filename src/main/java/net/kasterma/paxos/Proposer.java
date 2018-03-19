@@ -111,26 +111,27 @@ public class Proposer extends AbstractActor {
     private void accept(Accept a) {
         assert acceptorList != null;
         assert acceptances != null;
-        log.info("accept");
-        // The check that the index for the proposal is then then our prepare index if to check my programming, it would
-        // be an invalid action on the part of the Acceptor to send a too large idx.
-        if (a.idx == idx && a.getProp().getIdx() == idx) {
-            ActorRef sender = getSender();
-            // This check is only needed to check my programming; this kind of error would be byzantine or
-            // malicious.  Not part of the standard paxos algo to deal with.
-            if (acceptorList.contains(sender)) {
-                acceptances.put(getSender(), a);
-                if (acceptances.size() * 2 > acceptorList.size()) {
-                    log.info("decided");
-                } else {
-                    log.info("not enough");
-                }
-            } else {
-                log.info("Received acceptance from acceptor that is not on acceptor list");
-            }
-        } else {
-            log.info("Received acceptance for prepare that is not current prepare or prop invalid for this accep");
+
+        if (a.idx != idx || a.getProp().getIdx() != idx) {
+            log.info("Received acceptance for prepare that is not current"
+                    + " prepare or prop invalid for this accep");
+            return;
         }
+
+        ActorRef sender = getSender();
+        if (acceptorList.contains(sender)) {
+            acceptances.put(sender, a);
+        } else {
+            log.info("Received acceptance from unknown acceptor");
+            return;
+        }
+
+        // if (acceptances.size() * 2 > acceptorList.size()) then we could know
+        // the proposal has been accepted.  Since messages can get lost, we
+        // can't be sure (and since we will not request more info we'll not act
+        // on this).  To get a safe algorithm we don't have to do anything, to
+        // get liveness as well we'll need to maybe request more acceptances.
+        log.info("accept run");
     }
 
     /**
