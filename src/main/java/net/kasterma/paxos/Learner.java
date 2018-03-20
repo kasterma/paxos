@@ -7,7 +7,11 @@ import lombok.extern.slf4j.Slf4j;
 import scala.concurrent.duration.Duration;
 import scala.concurrent.duration.FiniteDuration;
 
-import java.util.*;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -15,8 +19,22 @@ import java.util.concurrent.TimeUnit;
  */
 @Slf4j
 public class Learner extends AbstractActor {
+    /**
+     * List of acceptors to work with; needs to be complete b/c its length
+     * determines the size of a majority.
+     */
     private final List<ActorRef> acceptorList;
+    /**
+     * Record of the received accepted Proposals (currently unused).
+     */
     private final Map<ActorRef, Acceptor.Proposal> accepted = new HashMap<>();
+    /**
+     * Count of receipt of different accepted Proposals.
+     */
+    private final Map<Acceptor.Proposal, Integer> cts = new HashMap<>();
+    /**
+     * Duration of interval to send out CheckValue messages.
+     */
     private final FiniteDuration duration =
             Duration.create(1, TimeUnit.SECONDS);
 
@@ -35,14 +53,28 @@ public class Learner extends AbstractActor {
         scheduleCheckValue(duration);
     }
 
-    void scheduleCheckValue(FiniteDuration duration) {
+    /**
+     * Schedule a message to myself to send messages checking again if a value
+     * has been chosen.
+     *
+     * @param duration A FiniteDuration with delay before checking again.
+     */
+    private void scheduleCheckValue(final FiniteDuration duration) {
         getContext().getSystem().scheduler().scheduleOnce(duration,
                 getSelf(), new CheckValue(),
                 getContext().getSystem().dispatcher(), null);
     }
 
+    /**
+     * Message used by the scheduler to send to myself to initiate another
+     * round of querying Acceptors.
+     */
     private static class CheckValue {}
 
+    /**
+     * Check for a chosen value; i.e. query the Acceptors to find out what they
+     * have accepted so far.
+     */
     private void checkValue() {
         log.info("Check if value has been decicded");
         if (chosenValue != null) {
@@ -68,10 +100,11 @@ public class Learner extends AbstractActor {
             return;
         }
 
+        // record the Proposal
         accepted.put(sender(), p);
-        Map<Acceptor.Proposal, Integer> cts = new HashMap<>();
-        accepted.values()
-                .forEach(pp -> cts.merge(pp, 1, Integer::sum));
+        cts.merge(p, 1, Integer::sum);
+
+        // check if we have found a chosen value yet
         Optional<Map.Entry<Acceptor.Proposal, Integer>> e =
                 cts.entrySet().stream()
                         .max(Comparator.comparingInt(Map.Entry::getValue));
@@ -84,6 +117,12 @@ public class Learner extends AbstractActor {
         }
     }
 
+    /**
+     * Set up the actor behavior.
+     *
+     * @return Recieve object to be used to set up initial interaction.
+     */
+    @Override
     public final Receive createReceive() {
         return receiveBuilder()
                 .match(Acceptor.Proposal.class, this::decided)

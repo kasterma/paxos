@@ -88,6 +88,11 @@ public class Acceptor extends AbstractActor {
         }
     }
 
+    /**
+     * Set up the actor behavior.
+     *
+     * @return Recieve object to be used to set up initial interaction.
+     */
     @Override
     public final Receive createReceive() {
         return receiveBuilder()
