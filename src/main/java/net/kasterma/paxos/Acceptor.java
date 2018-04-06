@@ -2,19 +2,30 @@ package net.kasterma.paxos;
 
 import akka.actor.AbstractActor;
 import akka.actor.Props;
+import akka.event.DiagnosticLoggingAdapter;
+import akka.event.Logging;
 import lombok.AllArgsConstructor;
 import lombok.Data;
-import lombok.extern.slf4j.Slf4j;
+
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Actor that implements the Acceptor role from the Paxos algorithm.
  */
-@Slf4j
+
 public class Acceptor extends AbstractActor {
+    private final DiagnosticLoggingAdapter log = Logging.getLogger(this);
+
     // No proposal with id <= maxPromise should be accepted.
     private int maxPromise = -1;
     // Proposal with max idx that his Acceptor has accepted.
     private Proposal accepted = null;
+
+    /**
+     * Mapped diagnostic context for logging.
+     */
+    private Map<String, Object> mdc = new HashMap<>();
 
     /**
      * Get the props for creating an Acceptor.
@@ -41,13 +52,19 @@ public class Acceptor extends AbstractActor {
      * @param p the received Proposal.
      */
     private void proposal(final Proposal p) {
-        log.info("proposal");
-        if (p.getIdx() > maxPromise) {
-            assert p.getIdx() - 1 == maxPromise;
-            accepted = p;
-            sender().tell(new Proposer.Accept(p, p.getIdx()), getSelf());
-        } else {
-            sender().tell(new Proposer.TooSmall(p.getIdx()), getSelf());
+        try {
+            mdc.put("sender", getSender().path());
+            log.setMDC(mdc);
+            log.debug("proposal");
+            if (p.getIdx() > maxPromise) {
+                assert p.getIdx() - 1 == maxPromise;
+                accepted = p;
+                sender().tell(new Proposer.Accept(p, p.getIdx()), getSelf());
+            } else {
+                sender().tell(new Proposer.TooSmall(p.getIdx()), getSelf());
+            }
+        } finally {
+            log.clearMDC();
         }
     }
 
@@ -59,16 +76,22 @@ public class Acceptor extends AbstractActor {
     }
 
     private void prepare(final Prepare p) {
-        log.info("prepare");
-        if (p.getIdx() > maxPromise) {
-            // the id in the prepare is the smallest that should still be
-            // accepted
-            maxPromise = p.getIdx() - 1;
-            getSender().tell(new Proposer.Promise(accepted, p.getIdx()),
-                    getSelf());
-        } else {
-            log.info("Recvd prepare for too small value");
-            getSender().tell(new Proposer.TooSmall(p.getIdx()), getSelf());
+        try {
+            mdc.put("sender", getSender().path());
+            log.setMDC(mdc);
+            log.debug("prepare");
+            if (p.getIdx() > maxPromise) {
+                // the id in the prepare is the smallest that should still be
+                // accepted
+                maxPromise = p.getIdx() - 1;
+                getSender().tell(new Proposer.Promise(accepted, p.getIdx()),
+                        getSelf());
+            } else {
+                log.info("Recvd prepare for too small value");
+                getSender().tell(new Proposer.TooSmall(p.getIdx()), getSelf());
+            }
+        } finally {
+            log.clearMDC();
         }
     }
 
@@ -76,15 +99,22 @@ public class Acceptor extends AbstractActor {
      * Request from Learner to find out of this Acceptor has accepted a
      * proposal.
      */
-    static class Accepted { }
+    static class Accepted {
+    }
 
     /**
      * If something has been accepted send it back to a learner so it can decide
      * if a value has been chosen.
      */
     private void accepted() {
-        if (accepted != null) {
-            sender().tell(accepted, getSelf());
+        try {
+            mdc.put("sender", getSender().path());
+            log.setMDC(mdc);
+            if (accepted != null) {
+                sender().tell(accepted, getSelf());
+            }
+        } finally {
+            log.clearMDC();
         }
     }
 
