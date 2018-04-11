@@ -41,15 +41,23 @@ public class Proposer extends AbstractActor {
      */
     private Map<String, Object> mdc = new HashMap<>();
 
+    /**
+     * Random source for generating proposals.
+     */
+    private final Random random;
+
     static Props props(final GenerateProposalIdx genIdx,
-                       final List<ActorRef> acceptorList) {
-        return Props.create(Proposer.class, genIdx, acceptorList);
+                       final List<ActorRef> acceptorList,
+                       long seed) {
+        return Props.create(Proposer.class, genIdx, acceptorList, seed);
     }
 
     Proposer(final GenerateProposalIdx genIdx,
-             final List<ActorRef> acceptorList) {
+             final List<ActorRef> acceptorList,
+             long seed) {
         this.genIdx = genIdx;
         this.acceptorList = acceptorList;
+        random = new Random(seed);
     }
 
     /**
@@ -71,11 +79,11 @@ public class Proposer extends AbstractActor {
                 p = new Acceptor.Proposal(idx, val);
             } else {
                 // For now just propose random value
-                p = new Acceptor.Proposal(idx, new Random().nextInt());
+                p = new Acceptor.Proposal(idx, random.nextInt());
                 log.info("Making proposal with new random value {}", p.getVal());
             }
 
-            promisesReceived.forEach((key, value) -> key.tell(p, getSelf()));
+            acceptorList.forEach(a -> a.tell(p, getSelf()));
             promisesReceived = null; // No longer waiting for pomises
         } finally {
             log.clearMDC();
@@ -194,13 +202,9 @@ public class Proposer extends AbstractActor {
                 log.debug("double recv promise");
                 return;
             }
-            if (acceptorList.contains(getSender())) {
-                promisesReceived.put(getSender(), p.getP());
-            } else {
-                log.debug("Got promise from non-acceptor");
-                promisesReceived.put(getSender(), p.getP());  // accepting anyway for test
-                return;
-            }
+
+            promisesReceived.put(getSender(), p.getP());
+
             if (promisesReceived.size() > acceptorList.size() / 2) {
                 log.debug("PROPOSE");
                 propose();

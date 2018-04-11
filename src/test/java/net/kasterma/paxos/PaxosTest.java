@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Random;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -41,8 +42,9 @@ class PaxosTest {
         TestKit probe = new TestKit(system);
         List<ActorRef> acceptorList = Collections.singletonList(probe.getRef());
         GenerateProposalIdx gen = new GenerateProposalIdx(2, 3);
-        ActorRef prop = system.actorOf(Proposer.props(gen, acceptorList),
-                "proposer-under-test");
+        ActorRef prop =
+                system.actorOf(Proposer.props(gen, acceptorList, 42),
+                        "proposer-under-test");
 
         prop.tell(new Proposer.DoPropose(), ActorRef.noSender());
         probe.expectMsg(new Acceptor.Prepare(2));
@@ -144,8 +146,10 @@ class PaxosTest {
 
 
             GenerateProposalIdx gen = new GenerateProposalIdx(2, 3);
-            ActorRef proposer = system.actorOf(Proposer.props(gen, acceptorForwards),
-                    "proposer-under-test");
+            long seed = 42;
+            ActorRef proposer =
+                    system.actorOf(Proposer.props(gen, acceptorForwards, seed),
+                            "proposer-under-test");
 
             TestKit proposerProbe = new TestKit(system);
             ForwardToActor proposerForward = new ForwardToActor(proposer);
@@ -161,7 +165,11 @@ class PaxosTest {
             proposerProbe.expectMsg(new Proposer.Promise(null, 2));
             proposerProbe.expectMsg(new Proposer.Promise(null, 2));
             proposerProbe.expectMsg(new Proposer.Promise(null, 2));
-            probes.get(0).expectMsgClass(Acceptor.Proposal.class); //new Acceptor.Proposal(2, 99));
+            // Leaking internals here for testing; we know that in this context
+            // the random generator is used exactly once to generate a proposal
+            // value; and we set the seed above.
+            probes.get(0).expectMsg(new Acceptor.Proposal(2,
+                    new Random(seed).nextInt()));
 
         }};
     }

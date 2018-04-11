@@ -31,7 +31,7 @@ public class Paxos {
         for (int idx = 0; idx < proposerCt; idx++) {
             GenerateProposalIdx genIdx =
                     new GenerateProposalIdx(0,proposerCt);
-            proposers.add(system.actorOf(Proposer.props(genIdx, acceptors),
+            proposers.add(system.actorOf(Proposer.props(genIdx, acceptors, 42),
                     "proposer-" + idx));
         }
 
