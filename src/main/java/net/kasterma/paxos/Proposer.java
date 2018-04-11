@@ -198,6 +198,7 @@ public class Proposer extends AbstractActor {
                 promisesReceived.put(getSender(), p.getP());
             } else {
                 log.debug("Got promise from non-acceptor");
+                promisesReceived.put(getSender(), p.getP());  // accepting anyway for test
                 return;
             }
             if (promisesReceived.size() > acceptorList.size() / 2) {
