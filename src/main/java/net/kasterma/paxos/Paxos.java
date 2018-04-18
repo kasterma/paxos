@@ -2,7 +2,7 @@ package net.kasterma.paxos;
 
 import akka.actor.ActorRef;
 import akka.actor.ActorSystem;
-import lombok.extern.slf4j.Slf4j;
+import lombok.extern.log4j.Log4j2;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -11,7 +11,7 @@ import java.util.List;
  * Set up paxos network of agents, and run a determination of a value through
  * it.
  */
-@Slf4j
+@Log4j2
 public class Paxos {
     public static void main(final String[] args) throws InterruptedException {
         log.info("running");

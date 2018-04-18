@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration status="WARN">
+    <Appenders>
+        <Console name="Console" target="SYSTEM_OUT">
+            <PatternLayout pattern="%d{yyyy-MM-dd HH:mm:ss} %-5p %X{akkaSource}:%L - %m%n"/>
+        </Console>
+        <Console name="FromTo" target="SYSTEM_OUT">
+            <PatternLayout pattern="%d{yyyy-MM-dd HH:mm:ss} %-5p (%X{sender} ---> %X{akkaSource}) - %m%n"/>
+        </Console>
+    </Appenders>
+    <Loggers>
+        <Root level="debug">
+            <AppenderRef ref="Console"/>
+        </Root>
+        <Logger name="net.kasterma.paxos.Acceptor" level="debug" additivity="false">
+            <AppenderRef ref="FromTo"/>
+        </Logger>
+        <Logger name="net.kasterma.paxos.Proposer" level="debug" additivity="false">
+            <AppenderRef ref="FromTo"/>
+        </Logger>
+        <Logger name="net.kasterma.paxos.Learner" level="debug" additivity="false">
+            <AppenderRef ref="FromTo"/>
+        </Logger>
+    </Loggers>
+</Configuration>
